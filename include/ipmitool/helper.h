@@ -79,8 +79,14 @@ struct oemvalstr {
 	const char * str;
 };
 
-const char * val2str(uint16_t val, const struct valstr * vs);
-const char * oemval2str(uint32_t oem,uint16_t val, const struct oemvalstr * vs);
+/* Find a string in value-string dictionary, or return NULL */
+const char *vs_lookup(uint16_t val, const struct valstr *vs);
+
+/* Convert a value to string using value-string dictionary */
+const char *val2str(uint16_t val, const struct valstr *vs);
+
+/* Convert a value to string using OEM value-string dictionary */
+const char *oemval2str(uint32_t oem,uint16_t val, const struct oemvalstr *vs);
 
 int str2double(const char * str, double * double_ptr);
 int str2long(const char * str, int64_t * lng_ptr);

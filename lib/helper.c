@@ -319,14 +319,25 @@ mac2str(const uint8_t *buf)
 	return buf2str_extended(buf, 6, ":");
 }
 
-const char * val2str(uint16_t val, const struct valstr *vs)
+const char *vs_lookup(uint16_t val, const struct valstr *vs)
 {
-	static char un_str[32];
 	int i;
 
 	for (i = 0; vs[i].str; i++) {
 		if (vs[i].val == val)
 			return vs[i].str;
+	}
+
+	return NULL;
+}
+
+const char *val2str(uint16_t val, const struct valstr *vs)
+{
+	static char un_str[32];
+	const char *str = vs_lookup(val, vs);
+
+	if (str) {
+		return str;
 	}
 
 	memset(un_str, 0, 32);
