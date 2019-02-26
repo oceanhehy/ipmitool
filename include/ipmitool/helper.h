@@ -110,6 +110,19 @@ void print_valstr(const struct valstr * vs, const char * title, int loglevel);
 void print_valstr_2col(const struct valstr * vs, const char * title, int loglevel);
 
 
+/* Print to log or to STDOUT depending on the ll argument.
+ * Negative ll means "print to STDOUT", otherwise ll is
+ * the log level to use when printing to log.
+ *
+ * NB: This macro does not need a trailing '\n' in fmt string.
+ */
+#define uprintf(ll, fmt, ...) do { \
+	if (ll < 0) \
+		printf(fmt "\n", ##__VA_ARGS__); \
+	else \
+		lprintf(ll, fmt, ##__VA_ARGS__); \
+} while(0)
+
 uint16_t buf2short(uint8_t * buf);
 uint32_t buf2long(uint8_t * buf);
 #define BUF2STR_MAXIMUM_OUTPUT_SIZE	(3*1024 + 1)
