@@ -149,7 +149,11 @@ static const int HPMFWUPG_ERROR = -1;
 /* Upload firmware specific error codes */
 static const int HPMFWUPG_UPLOAD_BLOCK_LENGTH = 1;
 static const int HPMFWUPG_UPLOAD_RETRY = 2;
-
+/* Find valid buffer length */
+#define BUFLEN_ISSET_NONE	0x00
+#define BUFLEN_ISSET_HALF	0x01
+#define BUFLEN_ISSET_FINE	0X02
+#define HPM_LAN_PACKET_RESIZE_LIMIT 6
 
 /* TARGET UPGRADE CAPABILITIES DEFINITIONS */
 #ifdef HAVE_PRAGMA_PACK

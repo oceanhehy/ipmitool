@@ -1097,7 +1097,8 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 	unsigned short count;
 	unsigned int totalSent = 0;
 	unsigned short bufLength = 0;
-	unsigned short bufLengthIsSet = 0;
+	unsigned short bufLength_half = 0;
+	unsigned short bufLengthIsSet = BUFLEN_ISSET_NONE;
 	unsigned int firmwareLength = 0;
 
 	unsigned int displayFWLength = 0;
@@ -1200,6 +1201,10 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 				count = bufLength;
 			} else {
 				count = (unsigned short)((pDataTemp+lengthOfBlock) - pData);
+				
+				lprintf(LOG_INFO,
+						"Last buffer length: %d",
+						count);
 			}
 			memcpy(&uploadCmd.req->data, pData, count);
 			imageOffset = 0x00;
@@ -1209,11 +1214,27 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 					pFwupgCtx, count, &imageOffset,&blockLength);
 			numRxPkts++;
 			if (rc != HPMFWUPG_SUCCESS) {
-				if (rc == HPMFWUPG_UPLOAD_BLOCK_LENGTH && !bufLengthIsSet) {
+				if (rc == HPMFWUPG_UPLOAD_BLOCK_LENGTH
+						&& bufLengthIsSet != BUFLEN_ISSET_FINE) {
 					rc = HPMFWUPG_SUCCESS;
 					/* Retry with a smaller buffer length */
-					if (strstr(intf->name,"lan") && bufLength > 2) {
-						bufLength >>= 1;
+					if (strstr(intf->name,"lan")) {
+						if (bufLengthIsSet == BUFLEN_ISSET_NONE
+								&& bufLength > 2) {
+							bufLength /= 2;
+							lprintf(LOG_INFO,
+									"Trying reduced buffer length: %d during BUFLEN_ISSET_NONE",
+									bufLength);
+						} else if (bufLengthIsSet == BUFLEN_ISSET_HALF) {
+							lprintf(LOG_INFO,
+									"Trying reduced buffer length: %d during BUFLEN_ISSET_FINE",
+									bufLength);
+							bufLength = bufLength_half;
+							bufLengthIsSet = BUFLEN_ISSET_FINE;	
+							lprintf(LOG_INFO,
+									"Trying reduced buffer length: %d during BUFLEN_ISSET_FINE",
+									bufLength);
+						}
 						lprintf(LOG_INFO,
 								"Trying reduced buffer length: %d",
 								bufLength);
@@ -1240,7 +1261,15 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 				}
 			} else {
 				/* success, buf length is valid */
-				bufLengthIsSet = 1;
+				if (strstr(intf->name,"lan") && bufLengthIsSet != BUFLEN_ISSET_FINE) {
+					bufLengthIsSet = BUFLEN_ISSET_HALF;
+					bufLength_half = bufLength;
+					bufLength += 1024;
+					errorCount = (HPM_LAN_PACKET_RESIZE_LIMIT - 1);
+					isValidSize = FALSE;
+				} else {
+					bufLengthIsSet = BUFLEN_ISSET_FINE;
+				}
 				if (imageOffset + blockLength > firmwareLength ||
 						imageOffset + blockLength < blockLength) {
 					/*
@@ -2154,7 +2183,6 @@ HpmfwupgSendCmd(struct ipmi_intf *intf, struct ipmi_rq req,
 	do {
 		rsp = intf->sendrecv(intf, &req);
 		if (!rsp) {
-			#define HPM_LAN_PACKET_RESIZE_LIMIT 6
 			/* also covers lanplus */
 			if (strstr(intf->name, "lan")) {
 				static struct ipmi_rs fakeRsp;
