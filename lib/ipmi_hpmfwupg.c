@@ -54,7 +54,7 @@ ipmi_intf_get_max_request_data_size(struct ipmi_intf * intf);
 
 extern int verbose;
 static unsigned char isValidSize = FALSE;
-static int errorCount = 0;
+static int invalidCount = 0;
 
 int HpmfwupgUpgrade(struct ipmi_intf *intf, char *imageFilename,
 		int activate, int, int);
@@ -1097,7 +1097,6 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 	unsigned short count;
 	unsigned int totalSent = 0;
 	unsigned short bufLength = 0;
-	unsigned short bufLength_half = 0;
 	unsigned short bufLengthIsSet = BUFLEN_ISSET_NONE;
 	unsigned int firmwareLength = 0;
 
@@ -1137,7 +1136,7 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 	}
 
 	bufLength = max_rq_size - sizeof(struct HpmfwupgUploadFirmwareBlockReq);
-
+	
 	/* Get firmware length */
 	firmwareLength =  pFwImage->length[0];
 	firmwareLength|= (pFwImage->length[1] << 8)  & 0xff00;
@@ -1194,7 +1193,7 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 		totalSent = 0x00;
 		displayFWLength= firmwareLength;
 		isValidSize = FALSE;
-		errorCount = 0;
+		invalidCount = 0;
 		time(&start);
 		while ((pData < (pDataTemp+lengthOfBlock)) && (rc == HPMFWUPG_SUCCESS)) {
 			if ((pData+bufLength) <= (pDataTemp+lengthOfBlock)) {
@@ -1222,18 +1221,9 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 						if (bufLengthIsSet == BUFLEN_ISSET_NONE
 								&& bufLength > 2) {
 							bufLength /= 2;
-							lprintf(LOG_INFO,
-									"Trying reduced buffer length: %d during BUFLEN_ISSET_NONE",
-									bufLength);
-						} else if (bufLengthIsSet == BUFLEN_ISSET_HALF) {
-							lprintf(LOG_INFO,
-									"Trying reduced buffer length: %d during BUFLEN_ISSET_FINE",
-									bufLength);
-							bufLength = bufLength_half;
+						} else if (bufLengthIsSet == BUFLEN_ISSET_RETRY) {
+							bufLength -= BUFLEN_INCREASE_STEP;
 							bufLengthIsSet = BUFLEN_ISSET_FINE;	
-							lprintf(LOG_INFO,
-									"Trying reduced buffer length: %d during BUFLEN_ISSET_FINE",
-									bufLength);
 						}
 						lprintf(LOG_INFO,
 								"Trying reduced buffer length: %d",
@@ -1262,11 +1252,21 @@ HpmFwupgActionUploadFirmware(struct HpmfwupgComponentBitMask components,
 			} else {
 				/* success, buf length is valid */
 				if (strstr(intf->name,"lan") && bufLengthIsSet != BUFLEN_ISSET_FINE) {
-					bufLengthIsSet = BUFLEN_ISSET_HALF;
-					bufLength_half = bufLength;
-					bufLength += 1024;
-					errorCount = (HPM_LAN_PACKET_RESIZE_LIMIT - 1);
-					isValidSize = FALSE;
+					if (invalidCount == 0) {
+						bufLengthIsSet = BUFLEN_ISSET_FINE;
+						lprintf(LOG_INFO,
+									"Using buffer length: %d",
+									bufLength);
+					} else {
+						bufLengthIsSet = BUFLEN_ISSET_RETRY;
+						bufLength += BUFLEN_INCREASE_STEP;
+						
+						lprintf(LOG_INFO,
+										"Trying +%d buffer length: %d",
+										BUFLEN_INCREASE_STEP, bufLength);
+						invalidCount = (HPM_LAN_PACKET_RESIZE_LIMIT - 1);
+						isValidSize = FALSE;
+					}
 				} else {
 					bufLengthIsSet = BUFLEN_ISSET_FINE;
 				}
@@ -2192,7 +2192,7 @@ HpmfwupgSendCmd(struct ipmi_intf *intf, struct ipmi_rq req,
 						"HPM: the command may be rejected for security reasons");
 				if (req.msg.netfn == IPMI_NETFN_PICMG
 						&& req.msg.cmd == HPMFWUPG_UPLOAD_FIRMWARE_BLOCK
-						&& errorCount < HPM_LAN_PACKET_RESIZE_LIMIT
+						&& invalidCount < HPM_LAN_PACKET_RESIZE_LIMIT
 						&& (!isValidSize)) {
 					lprintf(LOG_DEBUG,
 							"HPM: upload firmware block API called");
@@ -2200,7 +2200,7 @@ HpmfwupgSendCmd(struct ipmi_intf *intf, struct ipmi_rq req,
 							"HPM: returning length error to force resize");
 					fakeRsp.ccode = IPMI_CC_REQ_DATA_INV_LENGTH;
 					rsp = &fakeRsp;
-					errorCount++;
+					invalidCount++;
 				} else if (req.msg.netfn == IPMI_NETFN_PICMG
 						&& (req.msg.cmd == HPMFWUPG_ACTIVATE_FIRMWARE
 							|| req.msg.cmd == HPMFWUPG_MANUAL_FIRMWARE_ROLLBACK)) {
