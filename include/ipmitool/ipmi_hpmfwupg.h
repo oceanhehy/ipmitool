@@ -79,6 +79,7 @@ int ipmi_hpmfwupg_main(struct ipmi_intf *, int, char **);
  * (Buggy version = 39)
  */
 #define ENABLE_OPENIPMI_V39_PATCH
+#undef ENABLE_OPENIPMI_V39_PATCH
 
 #ifdef ENABLE_OPENIPMI_V39_PATCH
 # define RETRY_COUNT_MAX 3
